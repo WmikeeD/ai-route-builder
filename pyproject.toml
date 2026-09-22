@@ -1,0 +1,26 @@
+[project]
+name = "ai-route-builder"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "DTZ", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Emojis intencionales en los botones del bot (RUF001: caracter ambiguo).
+"app/adapters/telegram_bot.py" = ["RUF001"]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+python_version = "3.11"
+ignore_missing_imports = true
+disallow_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
