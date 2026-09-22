@@ -53,11 +53,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Disparar Deploy Hook de Render
+        if: secrets.RENDER_DEPLOY_HOOK_URL != ''
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: |
-          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "::error::Falta el secret RENDER_DEPLOY_HOOK_URL en la configuracion del repositorio."
-            exit 1
-          fi
-          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
+        run: curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
+
+      - name: Deploy hook no configurado (se omite)
+        if: secrets.RENDER_DEPLOY_HOOK_URL == ''
+        run: echo "Deploy hook no configurado (falta el secret RENDER_DEPLOY_HOOK_URL); se omite el deploy."
