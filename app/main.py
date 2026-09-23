@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from app.adapters.telegram_bot import create_application
 from app.adapters.vision.factory import build_fallback_chain
 from app.config import get_settings
+from app.logging_setup import setup_logging
 from app.services.session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
-    logging.basicConfig(level=settings.log_level)
+    # Siempre primero: silencia httpx/httpcore (loguean la URL con el token del
+    # bot) e instala la redaccion de tokens antes de crear clientes HTTP.
+    setup_logging(settings.log_level)
 
     # Cadena de fallback de vision: valida la config al arrancar (fail-fast) y
     # loguea que tiers quedaron activos.
