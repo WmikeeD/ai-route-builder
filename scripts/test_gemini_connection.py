@@ -25,16 +25,14 @@ import sys
 import time
 from pathlib import Path
 
-sys.stdout.reconfigure(encoding="utf-8")
-sys.stderr.reconfigure(encoding="utf-8")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.adapters.vision.factory import build_fallback_chain  # noqa: E402
-from app.config import get_settings  # noqa: E402
-from app.services.vision.chain import RetryPolicy  # noqa: E402
-from app.services.vision.errors import AllProvidersFailedError, FailureReason  # noqa: E402
-from app.services.vision.models import AttemptOutcome, ProviderAttempt  # noqa: E402
-from app.services.vision.telemetry import AttemptRecorder  # noqa: E402
+from app.adapters.vision.factory import build_fallback_chain
+from app.config import get_settings
+from app.services.vision.chain import RetryPolicy
+from app.services.vision.errors import AllProvidersFailedError, FailureReason
+from app.services.vision.models import AttemptOutcome, ProviderAttempt
+from app.services.vision.telemetry import AttemptRecorder, real_provider_calls
 
 TEST_IMAGE_PATH = Path(__file__).resolve().parent.parent / "EjemploRutaDrivin.jpeg"
 
@@ -52,9 +50,10 @@ class _Collector:
 
 
 class _HttpCallCounter(logging.Handler):
-    """Cuenta las solicitudes HTTP REALES a un proveedor (log de httpx/httpx2):
-    `generateContent` (Gemini), `/v1/responses` (OpenAI) o `/v1/messages`
-    (Anthropic)."""
+    """Control cruzado: requests con respuesta HTTP segun el log de
+    httpx/httpx2 (`generateContent` de Gemini, `/v1/responses` de OpenAI o
+    `/v1/messages` de Anthropic). No ve las llamadas que vencen por timeout:
+    el conteo oficial sale de los intentos de la cadena."""
 
     _LOGGERS = ("httpx", "httpx2")
     _MARKERS = ("generateContent", "/v1/responses", "/v1/messages")
@@ -150,7 +149,13 @@ async def main(allow_multi: bool) -> int:
     print()
     print("=" * 70)
     print("RESULTADO")
-    print(f"Solicitudes HTTP reales al proveedor: {counter.count}")
+    real_calls = real_provider_calls(collector.attempts)
+    print(f"Llamadas reales al proveedor: {real_calls}")
+    if counter.count != real_calls:
+        print(
+            f"  control cruzado: {counter.count} con respuesta HTTP en el log; "
+            f"la diferencia son llamadas sin respuesta (timeout o error de red)"
+        )
     print(f"Tiempo total: {elapsed:.2f} s (timeout configurado: {timeout_ms} ms)")
     for a in collector.attempts:
         if a.outcome in (AttemptOutcome.EXITO, AttemptOutcome.FALLO):
@@ -191,5 +196,7 @@ async def main(allow_multi: bool) -> int:
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+    sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     raise SystemExit(asyncio.run(main("--multi" in sys.argv)))
