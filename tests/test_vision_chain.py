@@ -508,6 +508,33 @@ def test_circuit_breaker_counts_exhausted_requests_not_individual_attempts() -> 
     assert "SALTADO_CIRCUITO" in harness.sink.outcomes
 
 
+def test_with_one_attempt_each_exhausted_request_is_exactly_one_breaker_failure() -> None:
+    """Con max_attempts=1 (default de Gemini), una solicitud que agota su
+    unico intento aporta 1 falla: el umbral 3 abre recien tras la 3a
+    solicitud, y cada una de las 3 alcanza a caer al tier 2."""
+    clock = FakeClock()
+    p1 = FakeProvider("gemini", [failure(R.ALTA_DEMANDA)] * 3)
+    p2 = FakeProvider("gemini", [ok_result(1)] * 4)
+    breaker = _breaker(clock, threshold=3)
+    harness = ChainHarness(
+        [tier(p1, "gemini-3.6-flash"), tier(p2, "gemini-3.8-flash")],
+        retry=ONE_ATTEMPT,
+        breaker=breaker,
+        clock=clock,
+    )
+
+    for _ in range(2):
+        asyncio.run(harness.run())
+    assert breaker.allow(CircuitBreaker.key("gemini", "gemini-3.6-flash")) is True
+
+    asyncio.run(harness.run())  # 3a falla: se cumple el umbral
+    asyncio.run(harness.run())  # 4a: tier 1 saltado, sin llamada
+
+    assert p1.calls == ["gemini-3.6-flash"] * 3  # 1 llamada por solicitud, sin reintentos
+    assert p2.calls == ["gemini-3.8-flash"] * 4
+    assert harness.sink.outcomes.count("SALTADO_CIRCUITO") == 1
+
+
 def test_a_multi_attempt_probe_reopens_the_circuit_exactly_once() -> None:
     """Caso borde corregido: durante un sondeo semiabierto, si el tier hace
     mas de 1 intento interno, el circuito debe reabrir con un solo evento
