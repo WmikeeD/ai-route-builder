@@ -14,6 +14,10 @@ Decisiones de esta capa (ver docs/ARQUITECTURA_FALLBACK_MULTIPROVEEDOR.md):
   SDK corria con `timeout=None` y una llamada llego a colgarse ~4.5 min.
 * Los errores de transporte de `httpx` (timeout, red) no vienen envueltos
   por el SDK: se mapean aqui a `TIMEOUT` / `CONEXION`.
+* No se envian `temperature`, `top_p` ni `top_k`: estan deprecados para los
+  modelos Gemini 3.x de la cadena (changelog del 21-jul-2026) y Google
+  recomienda dejar `temperature` en su default (1.0) en toda la familia 3.
+  La consistencia de la extraccion la da el schema estructurado.
 """
 
 from __future__ import annotations
@@ -68,9 +72,8 @@ class GeminiProvider(BaseVisionProvider):
     provider_id = "gemini"
     display_name = "Gemini"
 
-    def __init__(self, *, api_key: str, timeout_seconds: float, temperature: float = 0.0) -> None:
+    def __init__(self, *, api_key: str, timeout_seconds: float) -> None:
         super().__init__(timeout_seconds=timeout_seconds)
-        self._temperature = temperature
         self._client = genai.Client(
             api_key=api_key,
             http_options=types.HttpOptions(
@@ -87,7 +90,6 @@ class GeminiProvider(BaseVisionProvider):
         return cls(
             api_key=settings.api_key.get_secret_value(),
             timeout_seconds=settings.timeout_seconds,
-            temperature=settings.temperature,
         )
 
     async def aclose(self) -> None:
@@ -105,7 +107,6 @@ class GeminiProvider(BaseVisionProvider):
                 system_instruction=SYSTEM_INSTRUCTION,
                 response_mime_type="application/json",
                 response_schema=list[DeliveryEntryDTO],
-                temperature=self._temperature,
             ),
         )
 

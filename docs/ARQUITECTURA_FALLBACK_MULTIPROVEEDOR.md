@@ -285,7 +285,7 @@ Settings                                   (variables actuales sin cambio: teleg
  │     chain_deadline_seconds   tope total de espera de toda la cadena
  │     advance_on         razones que continúan
  │     attempts_log_path  (opcional) archivo JSONL de intentos
- ├─ gemini:    GeminiSettings      prefijo GEMINI_     api_key, timeout, reintentos, retry_status_codes, temperature/thinking
+ ├─ gemini:    GeminiSettings      prefijo GEMINI_     api_key, timeout, reintentos, retry_status_codes, thinking (sin temperature: deprecado en Gemini 3.x)
  ├─ openai:    OpenAISettings      prefijo OPENAI_     api_key, timeout, reintentos, esfuerzo de razonamiento, nivel de detalle de imagen
  └─ anthropic: AnthropicSettings   prefijo ANTHROPIC_  api_key, timeout, reintentos, effort/thinking
 ```

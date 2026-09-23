@@ -9,6 +9,7 @@ terceros. Nada de esto toca la red.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from types import SimpleNamespace
 from typing import Any
@@ -16,6 +17,7 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
+from google import genai
 from google.genai import errors, types
 
 from app.adapters.vision.gemini import (
@@ -269,6 +271,38 @@ def test_usage_tolerates_missing_candidates_and_usage_metadata() -> None:
 
     assert result.usage.prompt_tokens is None
     assert result.usage.finish_ok is True
+
+
+# ------------------------------------------------------------------ solicitud (SDK real)
+
+
+def test_the_request_on_the_wire_carries_no_deprecated_sampling_parameters() -> None:
+    """`temperature`, `top_p` y `top_k` estan deprecados en Gemini 3.x: el
+    cuerpo que arma el SDK real no debe llevarlos. Transporte simulado, sin red."""
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        candidate = {"content": {"parts": [{"text": "[]"}], "role": "model"}}
+        return httpx.Response(200, json={"candidates": [{**candidate, "finishReason": "STOP"}]})
+
+    provider = _provider()
+    provider._client = genai.Client(
+        api_key="test-key",
+        http_options=types.HttpOptions(
+            httpx_async_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
+
+    asyncio.run(provider._send(REQUEST, "gemini-3.6-flash"))
+
+    (body,) = bodies
+    config = body["generationConfig"]
+    assert config["responseMimeType"] == "application/json"
+    assert "responseSchema" in config or "responseJsonSchema" in config
+    for deprecated in ("temperature", "topP", "topK"):
+        assert deprecated not in config
 
 
 # ------------------------------------------------------------------ configuracion
