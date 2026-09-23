@@ -35,6 +35,10 @@ from app.services.vision.ports import VisionExtractorProvider
 
 logger = logging.getLogger(__name__)
 
+# Prefijo del mensaje de toda falla forzada: la marca como NO enviada al
+# proveedor real (los scripts de validacion la excluyen del conteo de llamadas).
+FAULT_MESSAGE_PREFIX = "[PRUEBA MANUAL]"
+
 
 @dataclass(frozen=True, slots=True)
 class _Fault:
@@ -135,7 +139,7 @@ class FaultInjectingProvider:
                 fault.reason,
                 provider=self.provider_id,
                 model=model,
-                message=f"[PRUEBA MANUAL] falla {rule.fault_token!r} forzada para '{model}'",
+                message=f"{FAULT_MESSAGE_PREFIX} falla {rule.fault_token!r} forzada para '{model}'",
                 http_status=fault.http_status,
                 provider_code=fault.provider_code,
                 limit_kind=fault.limit_kind,
