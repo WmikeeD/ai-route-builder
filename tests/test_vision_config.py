@@ -151,6 +151,24 @@ def test_each_provider_block_is_independent(
     assert settings.anthropic.has_api_key() is False
 
 
+def test_gemini_defaults_to_one_attempt_and_the_others_keep_two(isolated_env: Path) -> None:
+    """Gemini baja a 1 intento por tier; OpenAI y Anthropic no cambian."""
+    settings = Settings()
+
+    assert settings.gemini.max_attempts == 1
+    assert settings.gemini.effective_max_attempts == 1
+    assert settings.openai.max_attempts == 2
+    assert settings.anthropic.max_attempts == 2
+
+
+def test_gemini_max_attempts_is_still_overridable(
+    isolated_env: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GEMINI_MAX_ATTEMPTS", "2")
+
+    assert Settings().gemini.effective_max_attempts == 2
+
+
 def test_the_provider_timeout_is_a_setting_with_the_temporary_local_default(
     isolated_env: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

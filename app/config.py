@@ -93,6 +93,13 @@ class GeminiSettings(_ProviderSettings):
 
     # Sin `temperature`: deprecado en los modelos Gemini 3.x (ver gemini.py).
 
+    # 1 intento por tier (no el 2 del resto de proveedores): con demanda alta
+    # sostenida (503 / ALTA_DEMANDA), el segundo intento contra el mismo modelo
+    # casi nunca rescato nada en varias sesiones y solo demoraba el fallback.
+    # Aplica a TODOS los tiers de Gemini: la politica de reintento es por
+    # proveedor, no por tier.
+    max_attempts: int = Field(default=1, ge=1)
+
     # --- Alias DEPRECADOS (variante B') ---------------------------------
     # GEMINI_MODEL / GEMINI_FALLBACK_MODEL mapean a los tiers 1 y 2 de la
     # cadena cuando VISION_CHAIN no esta definida. Usa VISION_CHAIN.

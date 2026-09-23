@@ -156,6 +156,19 @@ def test_retry_policy_comes_from_each_provider_block(
     assert policies["openai"].max_attempts == 4
 
 
+def test_default_retry_policies_one_attempt_for_gemini_two_for_the_rest(
+    isolated_env: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _settings(monkeypatch, GEMINI_API_KEY="k")
+
+    chain = build_fallback_chain(settings, recorder=ListSink())
+
+    policies = chain._policy.retry_policies
+    assert policies["gemini"].max_attempts == 1
+    assert policies["openai"].max_attempts == 2
+    assert policies["anthropic"].max_attempts == 2
+
+
 # ------------------------------------------------------------------ inyeccion de fallas
 
 
