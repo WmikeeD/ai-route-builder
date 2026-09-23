@@ -128,7 +128,12 @@ _SEND_DOCUMENT_TIMEOUT_SECONDS = 30.0
 WELCOME_TEXT = (
     "Hola! Envíame una o varias capturas de pantalla de tu ruta "
     "(pantalla \"Visitas\"). Cuando termines, presiona \"🚀 Procesar Ruta\" "
-    "para recibir el PDF listo para tu planificador de rutas."
+    "para recibir el PDF listo para tu planificador de rutas.\n\n"
+    "Importante: al pasar de una captura a la siguiente, desliza un poco menos "
+    "de una pantalla, de modo que la última tarjeta de cada captura vuelva a "
+    "aparecer completa arriba de la siguiente. La tarjeta que queda cortada "
+    "junto al botón \"Comenzar Ruta\" se lee de la captura siguiente, y las "
+    "repetidas no se duplican en el PDF."
 )
 
 
