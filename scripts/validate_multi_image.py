@@ -6,7 +6,12 @@ extraccion, como hace "Procesar Ruta", y reporta:
 
 - las tarjetas extraidas por captura (para ver exactamente cuales se omiten),
 - las paradas finales tras deduplicar y agrupar (el numero que llega al PDF),
-- las solicitudes HTTP reales hechas al proveedor.
+- las llamadas reales al proveedor.
+
+Las llamadas reales se cuentan por los INTENTOS que registra la cadena (exito o
+fallo), no por las lineas de log de httpx: una llamada que vence por timeout no
+deja ninguna linea de log, y los SDK de OpenAI y Anthropic loguean por `httpx2`.
+El conteo por logs HTTP queda solo como control cruzado.
 
 GASTA CUOTA REAL. Sin `--max-calls` NO hace ninguna llamada: solo muestra la
 cadena y el peor caso de llamadas reales. Con `--max-calls N` corre solo si ese
@@ -28,18 +33,17 @@ import time
 from collections import Counter
 from pathlib import Path
 
-sys.stdout.reconfigure(encoding="utf-8")
-sys.stderr.reconfigure(encoding="utf-8")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.adapters.vision.factory import build_fallback_chain  # noqa: E402
-from app.config import get_settings  # noqa: E402
-from app.domain.route_engine import deduplicate_and_group  # noqa: E402
-from app.logging_setup import install_redaction_filter  # noqa: E402
-from app.services.vision.chain import RetryPolicy  # noqa: E402
-from app.services.vision.errors import AllProvidersFailedError  # noqa: E402
-from app.services.vision.models import AttemptOutcome, ProviderAttempt  # noqa: E402
-from app.services.vision.telemetry import AttemptRecorder  # noqa: E402
+from app.adapters.vision.factory import build_fallback_chain
+from app.config import get_settings
+from app.domain.route_engine import deduplicate_and_group
+from app.logging_setup import install_redaction_filter
+from app.services.vision.chain import RetryPolicy
+from app.services.vision.errors import AllProvidersFailedError
+from app.services.vision.fault_injection import FAULT_MESSAGE_PREFIX
+from app.services.vision.models import AttemptOutcome, ProviderAttempt
+from app.services.vision.telemetry import AttemptRecorder
 
 _MIME_BY_SUFFIX = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
 
@@ -56,9 +60,24 @@ class _Collector:
         self._recorder.record(attempt)
 
 
-class _HttpCallCounter(logging.Handler):
-    """Cuenta las solicitudes HTTP REALES a un proveedor (log INFO de httpx)."""
+def real_provider_calls(attempts: list[ProviderAttempt]) -> int:
+    """Llamadas que llegaron al proveedor real: intentos con exito o fallo,
+    incluidos los que vencieron por timeout. Excluye los tiers saltados
+    (inactivo, circuito, cuota) y las fallas forzadas por FORCE_VISION_ERROR,
+    que nunca salen del proceso."""
+    return sum(
+        1
+        for a in attempts
+        if a.outcome in (AttemptOutcome.EXITO, AttemptOutcome.FALLO)
+        and not (a.detail or "").startswith(FAULT_MESSAGE_PREFIX)
+    )
 
+
+class _HttpCallCounter(logging.Handler):
+    """Control cruzado: requests con respuesta HTTP segun el log INFO de
+    `httpx` (Gemini) y `httpx2` (OpenAI, Anthropic). No ve los timeouts."""
+
+    LOGGERS = ("httpx", "httpx2")
     _MARKERS = ("generateContent", "/v1/responses", "/v1/messages")
 
     def __init__(self) -> None:
@@ -116,7 +135,8 @@ async def main(paths: list[Path], max_calls: int | None, expected: int | None) -
     print()
 
     counter = _HttpCallCounter()
-    logging.getLogger("httpx").addHandler(counter)
+    for name in counter.LOGGERS:
+        logging.getLogger(name).addHandler(counter)
     entries: list = []
     failure_text: str | None = None
     start = time.perf_counter()
@@ -130,13 +150,20 @@ async def main(paths: list[Path], max_calls: int | None, expected: int | None) -
         failure_text = f"Fallo inesperado: {type(exc).__name__}: {exc}"
     finally:
         elapsed = time.perf_counter() - start
-        logging.getLogger("httpx").removeHandler(counter)
+        for name in counter.LOGGERS:
+            logging.getLogger(name).removeHandler(counter)
         await chain.aclose()
 
     print()
     print("=" * 70)
     print("RESULTADO")
-    print(f"Solicitudes HTTP reales al proveedor: {counter.count}")
+    real_calls = real_provider_calls(collector.attempts)
+    print(f"Llamadas reales al proveedor: {real_calls} (tope autorizado: {max_calls})")
+    if counter.count != real_calls:
+        print(
+            f"  control cruzado: {counter.count} con respuesta HTTP en el log; "
+            f"la diferencia son llamadas sin respuesta (timeout o error de red)"
+        )
     print(f"Tiempo total: {elapsed:.2f} s")
     for a in collector.attempts:
         if a.outcome in (AttemptOutcome.EXITO, AttemptOutcome.FALLO):
@@ -188,6 +215,8 @@ def _parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+    sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     args = _parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     install_redaction_filter()
