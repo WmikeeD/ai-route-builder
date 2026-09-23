@@ -41,9 +41,8 @@ from app.domain.route_engine import deduplicate_and_group
 from app.logging_setup import install_redaction_filter
 from app.services.vision.chain import RetryPolicy
 from app.services.vision.errors import AllProvidersFailedError
-from app.services.vision.fault_injection import FAULT_MESSAGE_PREFIX
 from app.services.vision.models import AttemptOutcome, ProviderAttempt
-from app.services.vision.telemetry import AttemptRecorder
+from app.services.vision.telemetry import AttemptRecorder, real_provider_calls
 
 _MIME_BY_SUFFIX = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
 
@@ -58,19 +57,6 @@ class _Collector:
     def record(self, attempt: ProviderAttempt) -> None:
         self.attempts.append(attempt)
         self._recorder.record(attempt)
-
-
-def real_provider_calls(attempts: list[ProviderAttempt]) -> int:
-    """Llamadas que llegaron al proveedor real: intentos con exito o fallo,
-    incluidos los que vencieron por timeout. Excluye los tiers saltados
-    (inactivo, circuito, cuota) y las fallas forzadas por FORCE_VISION_ERROR,
-    que nunca salen del proceso."""
-    return sum(
-        1
-        for a in attempts
-        if a.outcome in (AttemptOutcome.EXITO, AttemptOutcome.FALLO)
-        and not (a.detail or "").startswith(FAULT_MESSAGE_PREFIX)
-    )
 
 
 class _HttpCallCounter(logging.Handler):

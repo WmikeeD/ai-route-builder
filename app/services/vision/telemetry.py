@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Protocol
 
 from app.services.vision.errors import FailureReason, LimitKind
+from app.services.vision.fault_injection import FAULT_MESSAGE_PREFIX
 from app.services.vision.models import AttemptOutcome, ProviderAttempt
 
 human_logger = logging.getLogger("vision.attempts")
@@ -153,3 +155,17 @@ class AttemptRecorder:
             self._file_handler.close()
             self._file_logger = None
             self._file_handler = None
+
+
+def real_provider_calls(attempts: Iterable[ProviderAttempt]) -> int:
+    """Llamadas que llegaron al proveedor real: intentos con exito o fallo,
+    incluidos los que vencieron por timeout (que no dejan linea en el log de
+    httpx). Excluye los tiers saltados (inactivo, circuito, cuota) y las
+    fallas forzadas por FORCE_VISION_ERROR, que nunca salen del proceso.
+    Es el conteo que usan los scripts que gastan cuota real."""
+    return sum(
+        1
+        for a in attempts
+        if a.outcome in (AttemptOutcome.EXITO, AttemptOutcome.FALLO)
+        and not (a.detail or "").startswith(FAULT_MESSAGE_PREFIX)
+    )
