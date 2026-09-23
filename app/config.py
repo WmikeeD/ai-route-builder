@@ -91,7 +91,7 @@ class _ProviderSettings(BaseSettings):
 class GeminiSettings(_ProviderSettings):
     model_config = _env_config("GEMINI_")
 
-    temperature: float = 0.0
+    # Sin `temperature`: deprecado en los modelos Gemini 3.x (ver gemini.py).
 
     # --- Alias DEPRECADOS (variante B') ---------------------------------
     # GEMINI_MODEL / GEMINI_FALLBACK_MODEL mapean a los tiers 1 y 2 de la
