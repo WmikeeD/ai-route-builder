@@ -15,7 +15,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.adapters.telegram_bot import create_application
+from app.adapters.telegram_bot import (
+    POLLING_BOOTSTRAP_RETRIES,
+    create_application,
+    initialize_with_retry,
+)
 from app.adapters.vision.factory import build_fallback_chain
 from app.config import get_settings
 from app.logging_setup import setup_logging
@@ -45,10 +49,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.route_extractor = route_extractor
     app.state.session_manager = session_manager
 
-    await telegram_app.initialize()
+    await initialize_with_retry(telegram_app)
     await telegram_app.start()
     if telegram_app.updater is not None:
-        await telegram_app.updater.start_polling()
+        await telegram_app.updater.start_polling(bootstrap_retries=POLLING_BOOTSTRAP_RETRIES)
     logger.info("Bot de Telegram iniciado (polling).")
 
     try:
