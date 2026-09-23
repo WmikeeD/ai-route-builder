@@ -56,7 +56,13 @@ def _duplicate_key(entry: RawDeliveryEntry, address_key: str) -> _DuplicateKey |
     """Llave (direccion, package_id) para detectar la misma fila repetida
     entre capturas. Devuelve None si no hay package_id: sin el, no se puede
     afirmar con certeza que dos filas sean el mismo paquete, y tratarlas
-    como iguales arriesgaria perder un paquete real."""
+    como iguales arriesgaria perder un paquete real.
+
+    VIGILAR (marcha blanca, 2026-09-23): una tarjeta cortada al pie de una
+    captura puede traer el package_id pero no la comuna; su llave queda sin
+    comuna y no se fusiona con la misma tarjeta completa de la captura
+    siguiente. Senal: paradas duplicadas con la misma OT y comuna vacia en
+    una de las dos. No resuelto a proposito hasta verlo en uso real."""
     if not entry.package_id:
         return None
     return (address_key, entry.package_id.strip().lower())

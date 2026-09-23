@@ -505,3 +505,15 @@ def test_process_route_real_errors_use_the_generic_message(reason: FailureReason
 def test_provider_failure_notice_ignores_exceptions_that_are_not_chain_failures() -> None:
     assert telegram_bot._provider_failure_notice(RuntimeError("boom")) is None
     assert telegram_bot._provider_failure_notice(ValueError("x")) is None
+
+
+def test_welcome_text_asks_the_driver_to_overlap_the_scroll_between_captures() -> None:
+    """La ultima tarjeta de cada captura suele quedar cortada junto al boton
+    "Comenzar Ruta"; con el scroll superpuesto se lee entera en la siguiente
+    captura y la deduplicacion evita la parada repetida."""
+    text = telegram_bot.WELCOME_TEXT
+
+    assert "última tarjeta de cada captura" in text
+    assert "completa arriba de la siguiente" in text
+    assert "Comenzar Ruta" in text
+    assert "no se duplican" in text
