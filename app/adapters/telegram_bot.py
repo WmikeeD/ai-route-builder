@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -28,7 +29,7 @@ from telegram import (
     InputFile,
     Update,
 )
-from telegram.error import NetworkError, TelegramError, TimedOut
+from telegram.error import BadRequest, NetworkError, TelegramError, TimedOut
 from telegram.ext import (
     Application,
     ApplicationBuilder,
@@ -68,6 +69,21 @@ _PHOTO_DOWNLOAD_MAX_ATTEMPTS = 3
 _PHOTO_DOWNLOAD_RETRY_DELAY_SECONDS = 1.5
 _PHOTO_DOWNLOAD_FAILED_TEXT = "No pude descargar una de tus fotos, por favor reenvíala."
 _UNEXPECTED_ERROR_TEXT = "Ocurrió un error inesperado. Intenta de nuevo o usa /start."
+
+# Timeouts de las llamadas normales a la API de Telegram (getMe, deleteWebhook,
+# sendMessage...). El default de la libreria (5 s) deja poco margen para la
+# primera conexion de un arranque en frio (DNS + TLS); mas de ~10-15 s solo
+# demora descubrir un problema real mientras el usuario espera respuesta.
+# write=5, pool=1 y media_write=20 quedan en el default. `getUpdates` usa un
+# cliente propio y no se ve afectado.
+TELEGRAM_CONNECT_TIMEOUT_SECONDS = 10.0
+TELEGRAM_READ_TIMEOUT_SECONDS = 10.0
+
+# Reintentos de `initialize()` (getMe) al arrancar: espera antes de cada
+# reintento. Solo ante fallas de red; un token invalido falla de inmediato.
+STARTUP_RETRY_DELAYS_SECONDS: tuple[float, ...] = (2.0, 4.0)
+# Reintentos de la llamada inicial de `start_polling` (deleteWebhook).
+POLLING_BOOTSTRAP_RETRIES = 3
 
 # Si _process_route ya tiene el lock del chat tomado, una foto nueva se
 # rechaza sin agregarse a la sesion (rechazo tajante, sin buffer ni
@@ -490,7 +506,13 @@ def create_application(
     que los handlers (funciones simples, sin estado propio) los resuelvan
     en cada actualizacion.
     """
-    application = ApplicationBuilder().token(token).build()
+    application = (
+        ApplicationBuilder()
+        .token(token)
+        .connect_timeout(TELEGRAM_CONNECT_TIMEOUT_SECONDS)
+        .read_timeout(TELEGRAM_READ_TIMEOUT_SECONDS)
+        .build()
+    )
     application.bot_data[_BOT_DATA_SESSION_MANAGER] = session_manager or SessionManager()
     application.bot_data[_BOT_DATA_ROUTE_EXTRACTOR] = route_extractor
 
@@ -500,3 +522,40 @@ def create_application(
     application.add_error_handler(_handle_unexpected_error)
 
     return application
+
+
+def _is_transient_network_error(exc: TelegramError) -> bool:
+    # `BadRequest` hereda de `NetworkError` pero es un error de la solicitud:
+    # reintentarlo no cambia el resultado.
+    return isinstance(exc, NetworkError) and not isinstance(exc, BadRequest)
+
+
+async def initialize_with_retry(
+    application: Application,
+    delays: Sequence[float] = STARTUP_RETRY_DELAYS_SECONDS,
+) -> None:
+    """`application.initialize()` (hace getMe) con reintentos ante fallas de
+    red transitorias (`TimedOut`, `NetworkError`) de un arranque en frio.
+
+    `InvalidToken` y cualquier otro error se propagan sin reintentar. Tras el
+    ultimo intento fallido se propaga la ultima excepcion.
+    """
+    attempts = len(delays) + 1
+    for attempt in range(1, attempts + 1):
+        try:
+            await application.initialize()
+            return
+        except TelegramError as exc:
+            if attempt == attempts or not _is_transient_network_error(exc):
+                raise
+            delay = delays[attempt - 1]
+            logger.warning(
+                "No se pudo inicializar el bot de Telegram (intento %d/%d): %s: %s. "
+                "Reintentando en %.0f s.",
+                attempt,
+                attempts,
+                type(exc).__name__,
+                exc,
+                delay,
+            )
+            await asyncio.sleep(delay)
