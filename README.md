@@ -18,8 +18,8 @@ The backend is built with **FastAPI** to handle asynchronous requests and Webhoo
 
 ### 📸 Demo
 
-![Interacción con el Bot](./assets/bot-demo-start.jpeg)
-![Procesamiento de Ruta](./assets/bot-demo-pdf.jpeg)
+![Interacción con el Bot](./assets/bot-demo-start.png)
+![Presentación de Ruta Generada](./assets/bot-demo-pdf.png)
 
 ## ✨ Key Features
 - **Interactive UI via Telegram:** Menu-driven workflow for end-users (drivers).
