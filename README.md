@@ -16,17 +16,22 @@ The backend is built with **FastAPI** to handle asynchronous requests and Webhoo
 3. **AI Processing:** The raw text is passed to **Gemini API / OpenAI API** to identify, normalize, and structure the delivery addresses.
 4. **Resilience & Fallback:** If the AI model times out or the backend encounters an error, the system safely catches the exception and provides the user with an interactive "Retry" option, ensuring high availability.
 
+### 📸 Demo
+
+![Interacción con el Bot](./assets/bot-demo-start.jpeg)
+![Procesamiento de Ruta](./assets/bot-demo-pdf.jpeg)
+
 ## ✨ Key Features
-* **Interactive UI via Telegram:** Menu-driven workflow for end-users (drivers).
-* **Multi-AI Integration:** Combines Google Vision for OCR with LLMs (OpenAI/Gemini) for natural language parsing.
-* **Fault Tolerance:** Built-in retry mechanisms for third-party API failures.
+- **Interactive UI via Telegram:** Menu-driven workflow for end-users (drivers).
+- **Multi-AI Integration:** Combines Google Vision for OCR with LLMs (OpenAI/Gemini) for natural language parsing.
+- **Fault Tolerance:** Built-in retry mechanisms for third-party API failures.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-* Python 3.9+
-* Telegram Bot Token (from BotFather)
-* API Keys for OpenAI, Gemini, and Google Cloud Vision.
+- Python 3.9+
+- Telegram Bot Token (from BotFather)
+- API Keys for OpenAI, Gemini, and Google Cloud Vision.
 
 ### Installation
 
